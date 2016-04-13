@@ -11,7 +11,7 @@ def main():
     parser = argparse.ArgumentParser(description='Download Facebook conversations')
     parser.add_argument('thread', help='the id of the conversation to be downloaded')
 
-    parser.parse_args()
+    args = parser.parse_args()
     cookie = parse_cookie()
 
     ses = rq.Session()
@@ -29,11 +29,16 @@ def parse_cookie():
     cookie = rq.utils.cookiejar_from_dict(cookie)
     return cookie
 
-def request_data(thread):
+def request_data(thread, group=False):
+    if group:
+        conversation_type = 'thread_fbids'
+    else:
+        conversation_type = 'user_ids'
+
     data = config.request_data
-    data['messages[thread_fbids][' + thread + '][offset]'] = 0,
-    data['messages[thread_fbids][' + thread + '][timestamp]'] = 0,
-    data['messages[thread_fbids][' + thread + '][limit]'] = 0
+    data['messages[%s][%s][offset]' % (conversation_type, thread)] = 0,
+    data['messages[%s][%s][timestamp]' % (conversation_type, thread)] = 0,
+    data['messages[%s][%s][limit]' % (conversation_type, thread)] = 0
 
     return data
 
