@@ -3,6 +3,7 @@
 import requests as rq
 import argparse
 import config
+from time import time
 
 url_thread = 'https://www.facebook.com/ajax/mercury/thread_info.php'
 
@@ -27,6 +28,14 @@ def parse_cookie():
 
     cookie = rq.utils.cookiejar_from_dict(cookie)
     return cookie
+
+def request_data(thread):
+    data = config.request_data
+    data['messages[thread_fbids][' + thread + '][offset]'] = 0,
+    data['messages[thread_fbids][' + thread + '][timestamp]'] = 0,
+    data['messages[thread_fbids][' + thread + '][limit]'] = 0
+
+    return data
 
 if __name__ == '__main__':
     main()
