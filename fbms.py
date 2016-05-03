@@ -56,10 +56,13 @@ def clean_messages(payload):
 # Parse the command line arguments
 def parse_arguments():
     parser = argparse.ArgumentParser(description='Download Facebook conversations')
+    target_group = parser.add_mutually_exclusive_group()
     parser.add_argument('thread', help='the id of the conversation to be downloaded')
     parser.add_argument('-g', '--group', action='store_true', help='download a group conversation')
     parser.add_argument('number', nargs='?', type=check_negative, metavar='M', default=2000, help='the number of messages to be downloaded')
     parser.add_argument('offset', nargs='?', type=check_negative, default=0, help='number of most recent messages to skip downloading')
+    target_group.add_argument('--file', '-f', type=argparse.FileType('w'), help='file to save messages to')
+    target_group.add_argument('-p', action='store_true', help='print the messages to stdout')
 
     return parser.parse_args()
 
