@@ -27,13 +27,33 @@ def main():
     ses = rq.Session()
     ses.cookies = cookie
 
+    download_thread(args, ses)
+
+def download_thread(args, ses):
     jsondata = fetch_messages(ses, args.thread, args.offset, args.number, args.group)
 
     users = parse_thread_members(jsondata['payload'], args.thread)
 
-    with open("tjenna", 'w') as f:
-        f.write(json.dumps(jsondata))
+    messages = clean_messages(jsondata['payload'])
 
+    with open("tjenna", 'w') as f:
+        f.write(json.dumps(messages))
+
+# Remove unwanted data from messages
+# TODO make it possible to choose what to exctract
+def clean_messages(payload):
+    cleaned_messages = {}
+    messages = payload['actions']
+    for message in messages:
+        message_id = message['message_id']
+        author = message['author']
+        body = message['body']
+        has_attachment = message['has_attachment']
+        cleaned_messages[message_id] = (author, body, has_attachment)
+
+    return cleaned_messages
+
+# Parse the command line arguments
 def parse_arguments():
     parser = argparse.ArgumentParser(description='Download Facebook conversations')
     parser.add_argument('thread', help='the id of the conversation to be downloaded')
@@ -43,6 +63,8 @@ def parse_arguments():
 
     return parser.parse_args()
 
+# Download the specified number of messages with the provided thread, with an
+# optional offset
 def fetch_messages(ses, thread, offset=0, number=2000, group=False):
     data = request_data(thread, offset, number, group)
 
@@ -64,6 +86,7 @@ def parse_cookie():
     cookie = rq.utils.cookiejar_from_dict(cookie)
     return cookie
 
+# Generate request data for a new message fetching request
 def request_data(thread, offset=0, limit=2000, group=False):
     if group:
         conversation_type = 'thread_fbids'
@@ -77,13 +100,16 @@ def request_data(thread, offset=0, limit=2000, group=False):
 
     return data
 
+# Return a list with all members of a thread
+# TODO change to a dict mapping used id -> name
 def parse_thread_members(payload, thread):
-    users = { config.request_data['__user'] : 1 }
+    users = [ config.request_data['__user'] ]
     for user_id in payload['roger'][str(thread)]:
         users[user_id] = 1
 
     return users
 
+# Validate correct command line arguments
 def check_negative(value):
     ivalue = int(value)
     if ivalue < 0:
