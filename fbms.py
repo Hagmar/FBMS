@@ -3,6 +3,7 @@
 import requests as rq
 import argparse
 import config
+import json
 from time import time
 
 url_thread = 'https://www.facebook.com/ajax/mercury/thread_info.php'
@@ -20,23 +21,36 @@ headers = {
     }
 
 def main():
+    args = parse_arguments()
+    cookie = parse_cookie()
+
+    ses = rq.Session()
+    ses.cookies = cookie
+
+    jsondata = fetch_messages(ses, args.thread, args.offset, args.number, args.group)
+
+    users = parse_thread_members(jsondata['payload'], args.thread)
+
+    with open("tjenna", 'w') as f:
+        f.write(json.dumps(jsondata))
+
+def parse_arguments():
     parser = argparse.ArgumentParser(description='Download Facebook conversations')
     parser.add_argument('thread', help='the id of the conversation to be downloaded')
     parser.add_argument('-g', '--group', action='store_true', help='download a group conversation')
     parser.add_argument('number', nargs='?', type=check_negative, metavar='M', default=2000, help='the number of messages to be downloaded')
     parser.add_argument('offset', nargs='?', type=check_negative, default=0, help='number of most recent messages to skip downloading')
 
-    args = parser.parse_args()
-    cookie = parse_cookie()
+    return parser.parse_args()
 
-    ses = rq.Session()
-    ses.cookies = cookie
-    data = request_data(args.thread, args.offset, args.number, group=args.group)
+def fetch_messages(ses, thread, offset=0, number=2000, group=False):
+    data = request_data(thread, offset, number, group)
 
     res = ses.post(url_thread, data=data, headers=headers)
     res = res.text[9:]
-    with open("tjenna", 'w') as f:
-        f.write(res)
+
+    jsondata = json.loads(res)
+    return jsondata
 
 # Parse a cookie from string (as represented in Chrome developer tools)
 def parse_cookie():
@@ -62,6 +76,13 @@ def request_data(thread, offset=0, limit=2000, group=False):
     data['messages[%s][%s][limit]' % (conversation_type, thread)] = limit
 
     return data
+
+def parse_thread_members(payload, thread):
+    users = { config.request_data['__user'] : 1 }
+    for user_id in payload['roger'][str(thread)]:
+        users[user_id] = 1
+
+    return users
 
 def check_negative(value):
     ivalue = int(value)
