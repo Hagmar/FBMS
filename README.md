@@ -4,6 +4,7 @@ Download your Facebook messages!
 
 ### To do
 
+* Fix decoding issues
 * Specify number of messages to fetch
 * Include author name
 * Download from date range
@@ -19,4 +20,4 @@ Download your Facebook messages!
   * Audio
   * Other files
 * Additional data to fetch about messages
-* Handle stickers
+* Handle stickers somehow
