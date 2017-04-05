@@ -32,7 +32,7 @@ class Fbms:
 
     def run(self):
         thread_contents = self.download_thread()
-        users = self.extract_thread_members(thread_contents['payload'])
+        # users = self.extract_thread_members(thread_contents['payload'])
         messages = self.extract_messages(thread_contents['payload'])
         self.handle_messages(messages)
 
@@ -40,7 +40,8 @@ class Fbms:
         """Download the specified number of messages from the
         provided thread, with an optional offset
         """
-        data = request_data(self.thread, self.offset, self.number, self.group)
+        data = request_data(self.thread, offset=self.offset,
+                            limit=self.number, group=self.group)
         res = self.ses.post(url_thread, data=data, headers=headers)
 
         # Get rid of weird javascript in beginning of response
@@ -63,10 +64,11 @@ class Fbms:
         cleaned_messages = set()
         messages = payload['actions']
         for message in messages:
-            timestamp = message['timestamp']
-            author = message['author']
-            body = message['body']
-            cleaned_messages.add((timestamp, author, body))
+            if message['action_type'] == 'ma-type:user-generated-message':
+                timestamp = message['timestamp']
+                author = message['author']
+                body = message['body']
+                cleaned_messages.add((timestamp, author, body))
 
         return cleaned_messages
 
@@ -100,13 +102,14 @@ def parse_cookie(cookie):
     cookie = rq.utils.cookiejar_from_dict(cookie)
     return cookie
 
-def request_data(thread, offset=0, limit=2000, group=False):
+def request_data(thread, offset=0, timestamp=int(time()),
+                 limit=2000, group=False):
     """Generate request data for a new message-fetching request"""
     conversation_type = 'thread_fbids' if group else 'user_ids'
 
     data = config.request_data
     data['messages[{}][{}][offset]'.format(conversation_type, thread)] = offset
-    data['messages[{}][{}][timestamp]'.format(conversation_type, thread)] = int(time())
+    data['messages[{}][{}][timestamp]'.format(conversation_type, thread)] = timestamp
     data['messages[{}][{}][limit]'.format(conversation_type, thread)] = limit
 
     return data
@@ -125,11 +128,10 @@ def parse_args():
                         help='the id of the conversation to be downloaded')
     parser.add_argument('-g', '--group', action='store_true',
                         help='download a group conversation')
-    parser.add_argument('number', nargs='?', type=check_negative,
+    parser.add_argument('--number', type=check_negative,
                         metavar='N', default=2000,
                         help='the number of messages to be downloaded')
-    parser.add_argument('offset', nargs='?',
-                        type=check_negative, default=0,
+    parser.add_argument('--offset', type=check_negative, default=0,
                         help='number of most recent messages to skip downloading')
     parser.add_argument('--file', '-f',
                         help='file to save messages to')
