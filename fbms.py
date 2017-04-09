@@ -20,7 +20,7 @@ headers = {
     }
 
 class Fbms:
-    def __init__(self, args):
+    def __init__(self, args, limit_step=20):
         self.ses = rq.Session()
         self.ses.cookies = parse_cookie(config.cookie)
         self.thread = args.thread
@@ -28,24 +28,32 @@ class Fbms:
         self.number = args.number
         self.group = args.group
         self.file = args.file
+        self.hard = args.hard
+        self.fetched = 0
+        self.end_of_history = False
+        self.limit_step = limit_step
 
     def run(self):
+        message_timestamp = int(time())
         limit = 0
-        while limit < self.number:
-            offset = limit
-            limit = min(self.number, limit + 2)
-            thread_contents = self.download_thread(limit, offset)
+        while not self.end_of_history and self.fetched < self.number:
+            offset = self.fetched
+            limit = min(limit + self.limit_step, 200)
+            thread_contents = self.download_thread(limit, offset, message_timestamp)
             # users = self.extract_thread_members(thread_contents['payload'])
             messages = self.extract_messages(
                     thread_contents.get('payload', []))
             self.handle_messages(messages)
+            message_timestamp = messages[-1]['timestamp'] - 1
+            self.fetched += len(messages)
 
-    def download_thread(self, limit, offset):
+    def download_thread(self, limit, offset, message_timestamp):
         """Download the specified number of messages from the
         provided thread, with an optional offset
         """
         data = request_data(self.thread, offset=offset,
-                            limit=limit, group=self.group)
+                            limit=limit, group=self.group,
+                            timestamp=message_timestamp)
         res = self.ses.post(url_thread, data=data, headers=headers)
 
         # Get rid of weird javascript in beginning of response
@@ -65,26 +73,34 @@ class Fbms:
 # TODO make it possible to choose what to extract
     def extract_messages(self, payload):
         """Extract wanted data from messages"""
-        cleaned_messages = set()
+        cleaned_messages = []
         messages = payload.get('actions', [])
+        max_timestamp = 0
         for message in messages:
             if message['action_type'] == 'ma-type:user-generated-message':
-                timestamp = message['timestamp']
-                author = message['author']
-                body = message['body']
-                cleaned_messages.add((timestamp, author, body))
+                message_dict = {}
+                message_dict['timestamp'] = message['timestamp']
+                message_dict['author'] = message['author']
+                message_dict['body'] = message['body']
+                cleaned_messages.append(message_dict)
 
-        return cleaned_messages
+        if 'end_of_history' in payload:
+            self.end_of_history = True
+
+        return sorted(cleaned_messages, reverse=True,
+                      key=lambda x: x['timestamp'])
 
     def handle_messages(self, messages):
         """Perform specified action on messages"""
+        if self.hard and self.fetched + len(messages) > self.number:
+            messages = messages[:self.number - self.fetched]
         if self.file:
             with open(self.file, 'w') as f:
-                for message in sorted(messages, reverse=True):
-                    f.write('{} {}: {}'.format(*message))
+                for message in messages:
+                    f.write('{timestamp} {author}: {body}'.format(**message))
         else:
-            for message in sorted(messages, reverse=True):
-                print('{} {}: {}'.format(*message))
+            for message in messages:
+                print('{timestamp} {author}: {body}'.format(**message))
 
 
 def main():
@@ -134,11 +150,13 @@ def parse_args():
                         help='download a group conversation')
     parser.add_argument('--number', '-n', type=check_negative,
                         metavar='N', default=2000,
-                        help='the number of messages to be downloaded')
+                        help='the (approximate) number of messages to be downloaded')
     parser.add_argument('--offset', type=check_negative, default=0,
                         help='number of most recent messages to skip downloading')
     parser.add_argument('--file', '-f',
                         help='file to save messages to')
+    parser.add_argument('--hard', action='store_true',
+                        help='clamp number of downloaded messages to N.')
 
     return parser.parse_args()
 
