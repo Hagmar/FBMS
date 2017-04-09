@@ -11,7 +11,6 @@ url_thread = 'https://www.facebook.com/ajax/mercury/thread_info.php'
 headers = {
     'accept-encoding'   : 'gzip, deflate',
     'accept-language'   : 'en-US,en;q=0.8',
-    'cookie'            : config.cookie,
     'pragma'            : 'no-cache',
     'user-agent'        : 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/49.0.2623.112 Safari/537.36',
     'content-type'      : 'application/x-www-form-urlencoded',
@@ -31,17 +30,22 @@ class Fbms:
         self.file = args.file
 
     def run(self):
-        thread_contents = self.download_thread()
-        # users = self.extract_thread_members(thread_contents['payload'])
-        messages = self.extract_messages(thread_contents['payload'])
-        self.handle_messages(messages)
+        limit = 0
+        while limit < self.number:
+            offset = limit
+            limit = min(self.number, limit + 2)
+            thread_contents = self.download_thread(limit, offset)
+            # users = self.extract_thread_members(thread_contents['payload'])
+            messages = self.extract_messages(
+                    thread_contents.get('payload', []))
+            self.handle_messages(messages)
 
-    def download_thread(self):
+    def download_thread(self, limit, offset):
         """Download the specified number of messages from the
         provided thread, with an optional offset
         """
-        data = request_data(self.thread, offset=self.offset,
-                            limit=self.number, group=self.group)
+        data = request_data(self.thread, offset=offset,
+                            limit=limit, group=self.group)
         res = self.ses.post(url_thread, data=data, headers=headers)
 
         # Get rid of weird javascript in beginning of response
@@ -60,9 +64,9 @@ class Fbms:
 
 # TODO make it possible to choose what to extract
     def extract_messages(self, payload):
-        """Extract unwanted data from messages"""
+        """Extract wanted data from messages"""
         cleaned_messages = set()
-        messages = payload['actions']
+        messages = payload.get('actions', [])
         for message in messages:
             if message['action_type'] == 'ma-type:user-generated-message':
                 timestamp = message['timestamp']
@@ -76,10 +80,10 @@ class Fbms:
         """Perform specified action on messages"""
         if self.file:
             with open(self.file, 'w') as f:
-                for message in sorted(messages):
+                for message in sorted(messages, reverse=True):
                     f.write('{} {}: {}'.format(*message))
         else:
-            for message in sorted(messages):
+            for message in sorted(messages, reverse=True):
                 print('{} {}: {}'.format(*message))
 
 
@@ -128,7 +132,7 @@ def parse_args():
                         help='the id of the conversation to be downloaded')
     parser.add_argument('-g', '--group', action='store_true',
                         help='download a group conversation')
-    parser.add_argument('--number', type=check_negative,
+    parser.add_argument('--number', '-n', type=check_negative,
                         metavar='N', default=2000,
                         help='the number of messages to be downloaded')
     parser.add_argument('--offset', type=check_negative, default=0,
