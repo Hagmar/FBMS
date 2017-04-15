@@ -27,6 +27,7 @@ class Fbms:
         self.thread = args.thread
         self.offset = args.offset
         self.number = args.number
+        self.all = args.all
         self.group = args.group
         self.file = args.file
         self.hard = args.hard
@@ -41,7 +42,8 @@ class Fbms:
     def run(self):
         message_timestamp = int(time())
         limit = 0
-        while not self.end_of_history and self.fetched < self.number:
+        while (not self.end_of_history and
+                (self.all or self.fetched < self.number)):
             offset = self.fetched
             limit = min(limit + self.limit_step, 200)
             thread_contents = self.download_thread(limit, offset, message_timestamp)
@@ -162,13 +164,18 @@ def check_negative(value):
 # Parse the command line arguments
 def parse_args():
     parser = argparse.ArgumentParser(description='Download Facebook conversations')
+    number = parser.add_mutually_exclusive_group(required=True)
+
     parser.add_argument('thread',
                         help='the id of the conversation to be downloaded')
     parser.add_argument('-g', '--group', action='store_true',
                         help='download a group conversation')
-    parser.add_argument('--number', '-n', type=check_negative,
-                        metavar='N', default=2000,
-                        help='the (approximate) number of messages to be downloaded')
+    number.add_argument('--number', '-n', type=check_negative,
+                        metavar='N',
+                        help='the (approximate) number of messages to perform actions on')
+    number.add_argument('--all',
+                        action='store_true',
+                        help='perform actions on all messages')
     parser.add_argument('--offset', type=check_negative, default=0,
                         help='number of most recent messages to skip downloading')
     parser.add_argument('--file', '-f',
