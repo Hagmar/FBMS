@@ -30,6 +30,8 @@ class Fbms:
         self.all = args.all
         self.group = args.group
         self.file = args.file
+        if self.file:
+            self.output_file = open(self.file, 'w')
         self.hard = args.hard
         self.fetched = 0
         self.end_of_history = False
@@ -104,11 +106,10 @@ class Fbms:
         if self.hard and self.fetched + len(messages) > self.number:
             messages = messages[:self.number - self.fetched]
         if self.file:
-            with open(self.file, 'w') as f:
-                for message in messages:
-                    if self.user_message_count:
-                        self.user_message_counter[message['author']] += 1
-                    f.write('{timestamp} {author}: {body}\n'.format(**message))
+            for message in messages:
+                if self.user_message_count:
+                    self.user_message_counter[message['author']] += 1
+                self.output_file.write('{timestamp} {author}: {body}\n'.format(**message))
         else:
             for message in messages:
                 if self.user_message_count:
@@ -121,6 +122,8 @@ class Fbms:
             for user, count in sorted(self.user_message_counter.items(),
                                       key=lambda x: x[1]):
                 print('{} - {} messages'.format(user, count))
+        if self.file:
+            self.output_file.close()
 
 
 def main():
@@ -168,7 +171,7 @@ def parse_args():
 
     parser.add_argument('thread',
                         help='the id of the conversation to be downloaded')
-    parser.add_argument('-g', '--group', action='store_true',
+    parser.add_argument('--group', '-g', action='store_true',
                         help='download a group conversation')
     number.add_argument('--number', '-n', type=check_negative,
                         metavar='N',
