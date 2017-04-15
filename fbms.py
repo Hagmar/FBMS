@@ -1,10 +1,11 @@
 #!/usr/bin/python3
 
-import requests as rq
+from collections import defaultdict
+from time import time
 import argparse
 import config
 import json
-from time import time
+import requests as rq
 
 url_thread = 'https://www.facebook.com/ajax/mercury/thread_info.php'
 
@@ -32,6 +33,10 @@ class Fbms:
         self.fetched = 0
         self.end_of_history = False
         self.limit_step = limit_step
+        self.quiet = args.quiet
+        self.user_message_count = args.user_message_count
+        if self.user_message_count:
+            self.user_message_counter = defaultdict(int)
 
     def run(self):
         message_timestamp = int(time())
@@ -46,6 +51,8 @@ class Fbms:
             self.handle_messages(messages)
             message_timestamp = messages[-1]['timestamp'] - 1
             self.fetched += len(messages)
+
+        self.finish()
 
     def download_thread(self, limit, offset, message_timestamp):
         """Download the specified number of messages from the
@@ -97,10 +104,21 @@ class Fbms:
         if self.file:
             with open(self.file, 'w') as f:
                 for message in messages:
-                    f.write('{timestamp} {author}: {body}'.format(**message))
+                    if self.user_message_count:
+                        self.user_message_counter[message['author']] += 1
+                    f.write('{timestamp} {author}: {body}\n'.format(**message))
         else:
             for message in messages:
-                print('{timestamp} {author}: {body}'.format(**message))
+                if self.user_message_count:
+                    self.user_message_counter[message['author']] += 1
+                if not self.quiet:
+                    print('{timestamp} {author}: {body}'.format(**message))
+
+    def finish(self):
+        if self.user_message_count:
+            for user, count in sorted(self.user_message_counter.items(),
+                                      key=lambda x: x[1]):
+                print('{} - {} messages'.format(user, count))
 
 
 def main():
@@ -155,8 +173,14 @@ def parse_args():
                         help='number of most recent messages to skip downloading')
     parser.add_argument('--file', '-f',
                         help='file to save messages to')
+    parser.add_argument('--user-message-count', '--umc',
+                        action='store_true',
+                        help='count the number of messages each user has sent')
     parser.add_argument('--hard', action='store_true',
                         help='clamp number of downloaded messages to N.')
+    parser.add_argument('--quiet', '-q',
+                        action='store_true',
+                        help='don\'t print messages to stdout')
 
     return parser.parse_args()
 
